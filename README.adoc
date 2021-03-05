@@ -1,0 +1,106 @@
+= VSHN Application Catalog Demo
+
+== Setup Crossplane
+
+.Prerequisites
+TIP: https://k3d.io/[k3d], https://helm.sh/docs/intro/install/[helm]
+
+. Create three local Kubernetes clusters:
++
+[source]
+----
+k3d cluster create appc-control
+k3d cluster create appc-service --api-port $(docker network inspect bridge | jq -r '.[0].IPAM.Config[0].Gateway'):42042
+k3d cluster create appc-consumer
+----
+
+. https://crossplane.io/docs/v1.1/getting-started/install-configure.html[Install Crossplane] on `appc-control`:
++
+[source]
+----
+export KUBECONFIG=$(k3d kubeconfig write appc-control)
+
+kubectl create namespace crossplane-system
+
+helm repo add crossplane-stable https://charts.crossplane.io/stable
+helm repo update
+
+helm install crossplane --namespace crossplane-system crossplane-stable/crossplane
+----
+
+== Configure Crossplane and App Catalog
+
+. Create kubeconfig secret to access `appc-service` from `appc-control`
++
+[source]
+----
+# TODO onelinerize
+k3d kubeconfig get appc-service > kubeconfig
+kubectl -n crossplane-system create secret generic appc-service-kubeconfig --from-file=kubeconfig
+rm kubeconfig
+----
+
+. Install and configure providers (Helm and SQL) and Secrets Generator Operator:
++
+[source]
+----
+kubectl apply -f 01-base/provider.yaml
+kubectl apply -f 01-base/secret-generator.yaml
+sleep 10
+kubectl apply -f 01-base/providerconfig.yaml
+----
+
+. Install Compositions (aka Plans)
++
+[source]
+----
+kubectl apply -f 02-app-catalog/app-catalog.yaml
+kubectl apply -f 02-app-catalog/redis.yaml
+# TODO kubectl apply -f 02-app-catalog/mariadb.yaml
+----
+
+== Instantiate a Service
+
+Instantiate your first service:
+
+[source]
+----
+kubectl apply -f 03-instances/redis1.yaml
+# TODO kubectl apply -f 03-instances/mariadb1.yaml
+----
+
+And now see what happens:
+[source]
+----
+kubectl get release
+kubectl get redisinstances.syn.tools
+export KUBECONFIG=$(k3d kubeconfig write appc-service)
+kubectl -n redis1 get pods
+----
+
+== Setup Crossplane Service Broker
+
+WARNING: TODO
+
+== Test Crossplane Service Broker
+
+https://github.com/starkandwayne/eden
+
+WARNING: TODO
+
+== Setup Service Catalog
+
+WARNING: TODO
+
+== Use Service Catalog
+
+WARNING: TODO
+
+== Cleanup
+
+[source]
+----
+k3d cluster delete appc-service
+k3d cluster delete appc-control
+k3d cluster delete appc-consumer
+----

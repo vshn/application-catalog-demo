@@ -1,0 +1,9 @@
+apiVersion: syn.tools/v1alpha1
+kind: RedisInstance
+metadata:
+  name: redis1
+  labels:
+    service.syn.tools/cluster: appc-service
+spec:
+  compositionRef:
+    name: redis-small

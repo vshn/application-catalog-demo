@@ -1,0 +1,256 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  annotations:
+    service.syn.tools/description: Redis key value store
+    service.syn.tools/metadata:
+      "{\n    \"displayName\": \"Redis\",\n    \"documentationUrl\"\
+      : \"https://kb.vshn.ch/app-catalog/redis.html\",\n    \"\
+      shareable\": true,\n    \"version\": \"6.0.10-debian-10-r19\"\n}"
+    service.syn.tools/tags: "[\n    \"redis\"\n]"
+  labels:
+    name: redisinstances.syn.tools
+    service.syn.tools/id: redis-plans
+    service.syn.tools/name: redis
+    service.syn.tools/updatable: "true"
+  name: redisinstances.syn.tools
+spec:
+  connectionSecretKeys: []
+  group: syn.tools
+  names:
+    kind: RedisInstance
+    plural: redisinstances
+  versions:
+    - additionalPrinterColumns:
+        - jsonPath: .metadata.labels['service\.syn\.tools/plan']
+          name: Plan
+          type: string
+        - jsonPath: .metadata.labels['service\.syn\.tools/cluster']
+          name: Cluster
+          type: string
+      name: v1alpha1
+      referenceable: true
+      served: true
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  annotations:
+    service.syn.tools/description: Redis Instance small
+    service.syn.tools/metadata:
+      "{\n    \"bullets\": [\n        \"onboarding\",\n\
+      \        \"powered by VSHN\"\n    ],\n    \"databases\": 16,\n    \"dedicatedService\"\
+      : true,\n    \"displayName\": \"Small\",\n    \"highAvailability\": true,\n\
+      \    \"max_databases\": \"16\",\n    \"memory\": \"1Gi\",\n    \"mtls_enabled\"\
+      : false,\n    \"nodes\": \"3\",\n    \"shareable\": true,\n    \"storageCapacity\"\
+      : \"8Gi\"\n}"
+  labels:
+    name: redis-small
+    service.syn.tools/cluster: appc-service
+    service.syn.tools/id: redis-plans
+    service.syn.tools/name: redis
+    service.syn.tools/plan: small
+    service.syn.tools/updatable: "true"
+  name: redis-small
+spec:
+  compositeTypeRef:
+    apiVersion: syn.tools/v1alpha1
+    kind: RedisInstance
+  resources:
+    - base:
+        apiVersion: helm.crossplane.io/v1alpha1
+        kind: Release
+        spec:
+          forProvider:
+            chart:
+              name: haproxy
+              repository: https://charts.appuio.ch
+              version: 1.3.4
+            set:
+              - name: haproxy.redisk8s.check.redis.auth
+                valueFrom:
+                  secretKeyRef:
+                    key: password
+                    namespace: app-catalog
+            values:
+              fullnameOverride: haproxy
+              haproxy:
+                config: redisk8s
+                frontendPort: 6789
+                securityContext:
+                  runAsUser: 1000
+              image:
+                registry: docker.io
+                repository: haproxytech/haproxy-debian
+                tag: 2.3.4
+              replicaCount: 1
+              resources:
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+                requests:
+                  cpu: 200m
+                  memory: 256Mi
+              service:
+                additionalPorts:
+                  - name: sentinel
+                    port: 26379
+                    targetPort: sentinel
+                  - name: redis
+                    port: 6379
+                    targetPort: frontend
+                port: 6789
+                type: LoadBalancer
+              sidecarContainers:
+                - env:
+                    - name: REDIS_MASTER_SET
+                    - name: REDIS_MASTER_PASSWORD
+                      value: fake-password
+                    - name: REDIS_MASTER_HOST
+                    - name: REDIS_SENTINEL_QUORUM
+                      value: "1"
+                    - name: REDIS_SENTINEL_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          key: redis-password
+                          name: redis
+                    - name: REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS
+                      value: "604800000"
+                    - name: REDIS_SENTINEL_FAILOVER_TIMEOUT
+                      value: "604800000"
+                    - name: REDIS_SENTINEL_PORT_NUMBER
+                      value: "26789"
+                  image: docker.io/bitnami/redis-sentinel:6.0.10-debian-10-r18
+                  name: sentinel
+                  ports:
+                    - containerPort: 26789
+                      name: sentinel
+                  securityContext:
+                    privileged: false
+                    runAsUser: 10001
+          reclaimPolicy: Delete
+          rollbackLimit: 3
+      patches:
+        - fromFieldPath: metadata.labels
+          toFieldPath: metadata.labels
+        - fromFieldPath: metadata.annotations
+          toFieldPath: metadata.annotations
+        - fromFieldPath: metadata.labels[crossplane.io/composite]
+          toFieldPath: spec.forProvider.namespace
+        - fromFieldPath: metadata.labels[service.syn.tools/cluster]
+          toFieldPath: spec.providerConfigRef.name
+        - fromFieldPath: metadata.labels[crossplane.io/composite]
+          toFieldPath: spec.forProvider.set[0].valueFrom.secretKeyRef.name
+        - fromFieldPath: metadata.labels[crossplane.io/composite]
+          toFieldPath: spec.forProvider.values.haproxy.redisk8s.dnsservicename
+          transforms:
+            - string:
+                fmt: redis-headless.%s.svc.cluster.local
+              type: string
+        - fromFieldPath: metadata.labels[crossplane.io/composite]
+          toFieldPath: spec.forProvider.values.sidecarContainers[0].env[2].value
+          transforms:
+            - string:
+                fmt: haproxy.%s.svc.cluster.local
+              type: string
+        - fromFieldPath: metadata.labels[crossplane.io/composite]
+          toFieldPath: spec.forProvider.values.sidecarContainers[0].env[0].value
+    - base:
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          annotations:
+            secret-generator.v1.mittwald.de/autogenerate: password
+        stringData:
+          port: "6379"
+          sentinelPort: "26379"
+      patches:
+        - fromFieldPath: metadata.labels[crossplane.io/composite]
+          toFieldPath: metadata.name
+        - fromFieldPath: kind
+          toFieldPath: metadata.namespace
+          transforms:
+            - map:
+                RedisInstance: app-catalog
+              type: map
+      readinessChecks:
+        - type: None
+    - base:
+        apiVersion: helm.crossplane.io/v1alpha1
+        kind: Release
+        spec:
+          forProvider:
+            chart:
+              name: redis
+              repository: https://charts.bitnami.com/bitnami
+              version: 12.7.4
+            set:
+              - name: password
+                valueFrom:
+                  secretKeyRef:
+                    key: password
+                    namespace: app-catalog
+            values:
+              cluster:
+                slaveCount: 3
+              configmap: "activedefrag yes
+
+                appendonly yes
+
+                save 60 1000
+
+                save 300 1
+
+                maxmemory 1gb
+
+                "
+              fullnameOverride: redis
+              global:
+                imageRegistry: docker.io
+              image:
+                tag: 6.0.10-debian-10-r19
+              podDisruptionBudget:
+                enabled: true
+                maxUnavailable: 1
+                minAvailable: ""
+              sentinel:
+                downAfterMilliseconds: 3000
+                enabled: true
+                failoverTimeout: 5000
+                image:
+                  repository: bitnami/redis-sentinel
+                  tag: 6.0.10-debian-10-r18
+                resources:
+                  limits:
+                    cpu: 200m
+                    memory: 64Mi
+                  requests:
+                    cpu: 100m
+                    memory: 32Mi
+                staticID: true
+              slave:
+                persistence:
+                  size: 16Gi
+                readinessProbe:
+                  initialDelaySeconds: 30
+                resources:
+                  limits:
+                    cpu: 4000m
+                    memory: 9Gi
+                  requests:
+                    cpu: 100m
+                    memory: 500Mi
+              usePasswordFile: true
+          reclaimPolicy: Delete
+          rollbackLimit: 3
+      patches:
+        - fromFieldPath: metadata.labels
+          toFieldPath: metadata.labels
+        - fromFieldPath: metadata.annotations
+          toFieldPath: metadata.annotations
+        - fromFieldPath: metadata.labels[crossplane.io/composite]
+          toFieldPath: spec.forProvider.namespace
+        - fromFieldPath: metadata.labels[service.syn.tools/cluster]
+          toFieldPath: spec.providerConfigRef.name
+        - fromFieldPath: metadata.labels[crossplane.io/composite]
+          toFieldPath: spec.forProvider.set[0].valueFrom.secretKeyRef.name
