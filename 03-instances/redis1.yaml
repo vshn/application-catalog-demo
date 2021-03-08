@@ -3,7 +3,8 @@ kind: RedisInstance
 metadata:
   name: redis1
   labels:
-    service.syn.tools/cluster: appc-service
+    service.syn.tools/cluster: appc-service1
+    service.syn.tools/plan: small
 spec:
   compositionRef:
     name: redis-small

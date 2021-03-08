@@ -58,19 +58,21 @@ spec:
       containers:
         - args: []
           env:
-            - name: OSB_PASSWORD
-              value: Passw0rd
             - name: OSB_SERVICE_IDS
-              value: 8d4b8039-6bcc-4f68-98f0-0e8efa5ab0e2
+              value: redis-k8s
             - name: OSB_USERNAME
               value: osbuser
-          image: docker.io/vshn/crossplane-service-broker-poc:v0.1.8
+            - name: OSB_PASSWORD
+              value: Passw0rd
+            - name: OSB_NAMESPACE
+              value: crossplane-system
+          image: docker.io/vshn/crossplane-service-broker:v0.2.0
           imagePullPolicy: Always
           livenessProbe:
             httpGet:
               path: /healthz
               port: http
-            initialDelaySeconds: 60
+            initialDelaySeconds: 2
           name: service-broker
           ports:
             - containerPort: 8080
@@ -130,3 +132,23 @@ spec:
                 name: service-broker-redis
                 port:
                   number: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: redis
+    app.kubernetes.io/name: service-broker
+    name: service-broker-redis
+  name: service-broker-redis-port
+  namespace: service-broker
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      nodePort: 30001
+  selector:
+    app.kubernetes.io/instance: redis
+    app.kubernetes.io/name: service-broker
+  type: NodePort
