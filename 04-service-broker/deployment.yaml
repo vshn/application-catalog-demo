@@ -66,7 +66,7 @@ spec:
               value: Passw0rd
             - name: OSB_NAMESPACE
               value: crossplane-system
-          image: docker.io/vshn/crossplane-service-broker:v0.2.0
+          image: docker.io/vshn/crossplane-service-broker:v0.3.0
           imagePullPolicy: Always
           livenessProbe:
             httpGet:
