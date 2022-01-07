@@ -36,9 +36,14 @@ TIP: https://k3d.io/[k3d], https://helm.sh/docs/intro/install/[helm]
 +
 [source,shell]
 ----
+# linux
 export DOCKER_NETWORK_GATEWAY=$(docker network inspect bridge | jq -r '.[0].IPAM.Config[0].Gateway')
-k3d cluster create appc-control -p "30000-30002:30000-30002@server[0]"
-k3d cluster create appc-service1 --api-port 0.0.0.0:42042 -p "30003-30010:30003-30010@server[0]" --k3s-server-arg "--tls-san=${DOCKER_NETWORK_GATEWAY}"
+# macos with docker for desktop
+# interface has to be adjusted
+export DOCKER_NETWORK_GATEWAY=$(ipconfig getifaddr en6)
+
+k3d cluster create appc-control -p "30000-30002:30000-30002@server:0"
+k3d cluster create appc-service1 --api-port 0.0.0.0:42042 -p "30003-30010:30003-30010@server:0" --k3s-arg "--tls-san=${DOCKER_NETWORK_GATEWAY}@server:0"
 k3d cluster create appc-consumer1
 ----
 
@@ -48,8 +53,11 @@ k3d cluster create appc-consumer1
 ----
 kubectl config use-context k3d-appc-control
 
-helm install crossplane --create-namespace --namespace crossplane-system --repo https://charts.crossplane.io/stable crossplane --set "args[0]='--debug'"
-helm install secret-generator --create-namespace --namespace secret-generator --repo https://helm.mittwald.de kubernetes-secret-generator
+helm repo add crossplane https://charts.crossplane.io/stable
+helm repo add secret-generator https://helm.mittwald.de
+
+helm install crossplane --create-namespace --namespace crossplane-system crossplane/crossplane --set "args[0]='--debug'"
+helm install secret-generator --create-namespace --namespace secret-generator secret-generator/kubernetes-secret-generator
 ----
 
 == Configure Crossplane and App Catalog
@@ -161,7 +169,8 @@ curl -i -s -X DELETE -H "X-Broker-API-Version: 2.16" -H "Content-Type: applicati
 [source,shell]
 ----
 kubectl config use-context k3d-appc-consumer1
-helm install catalog --create-namespace --namespace catalog --repo https://kubernetes-sigs.github.io/service-catalog catalog
+helm repo add service-catalog https://kubernetes-sigs.github.io/service-catalog
+helm install catalog --create-namespace --namespace catalog service-catalog/catalog
 ----
 
 . Get the latest https://github.com/kubernetes-sigs/service-catalog/releases[svcat] binary.
