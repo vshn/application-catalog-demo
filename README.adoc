@@ -71,7 +71,7 @@ TIP: For OpenShift you can use the provided `crossplane-openshift-values.yaml` H
 kubectl -n crossplane-system create secret generic appc-service1-kubeconfig --from-literal=kubeconfig="$(k3d kubeconfig get appc-service1 | sed -e 's|server:\s*.*$|server: https://'${DOCKER_NETWORK_GATEWAY}':42042|g')"
 ----
 
-. Install and configure providers (Helm and SQL) and Secrets Generator Operator:
+. Install and configure providers (Helm and SQL)
 +
 [source,shell]
 ----

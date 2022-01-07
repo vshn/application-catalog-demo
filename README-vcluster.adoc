@@ -1,0 +1,88 @@
+= VSHN Application Catalog Demo - All-in-One Vcluster
+
+This guide will provide a demo instance of the "Application Catalog" concept of VSHN in a Vcluster instance.
+
+== Setup Crossplane
+
+.Prerequisites
+TIP: https://github.com/loft-sh/vcluster/releases[vcluster], https://helm.sh/docs/intro/install/[helm]
+
+. Create a vcluster:
++
+[source,shell]
+----
+vcluster create appcatdemo
+----
+
+. https://crossplane.io/docs/v1.1/getting-started/install-configure.html[Install Crossplane] and https://github.com/mittwald/kubernetes-secret-generator[Secrets Generator] in vcluster:
++
+[source,shell]
+----
+vcluster connect appcatdemo --namespace default
+export KUBECONFIG=./kubeconfig.yaml
+
+helm repo add crossplane https://charts.crossplane.io/stable
+helm repo add secret-generator https://helm.mittwald.de
+
+helm install crossplane --create-namespace --namespace crossplane-system crossplane/crossplane --set "args[0]='--debug'"
+helm install secret-generator --create-namespace --namespace secret-generator secret-generator/kubernetes-secret-generator
+----
+
+== Configure Crossplane and App Catalog
+
+. Create kubeconfig secret to access the local cluster
++
+[source,shell]
+----
+kubectl -n crossplane-system create secret generic appc-service1-kubeconfig --from-literal=kubeconfig="$(cat kubeconfig.yaml | sed -e 's|server:\s*.*$|server: https://kubernetes.default.svc|g')"
+----
+
+. Install and configure providers (Helm and SQL)
++
+[source,shell]
+----
+kubectl apply -f 01-base/provider.yaml
+while ! $(kubectl get ProviderConfig >/dev/null 2>&1); do echo "provider not ready yet - waiting"; sleep 1; done
+kubectl apply -f 01-base/providerconfig.yaml
+----
+
+. Install Compositions (aka Plans)
++
+[source,shell]
+----
+kubectl apply -f 02-app-catalog/app-catalog.yaml
+kubectl apply -f 02-app-catalog/redis.yaml
+----
+
+== Instantiate a Service
+
+. Instantiate your first service:
++
+[source,shell]
+----
+kubectl apply -f 03-instances/redis1.yaml
+----
+
+. And now see what happens:
++
+[source,shell]
+----
+kubectl get release
+# wait until READY = true
+kubectl get redisinstances.syn.tools -w
+kubectl -n redis1 get pods
+----
+
+. Cleanup:
++
+[source,shell]
+----
+kubectl delete -f 03-instances/redis1.yaml
+----
+
+== Cleanup
+
+[source,shell]
+----
+vcluster delete appcatdemo
+----
