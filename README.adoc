@@ -60,6 +60,8 @@ helm install crossplane --create-namespace --namespace crossplane-system crosspl
 helm install secret-generator --create-namespace --namespace secret-generator secret-generator/kubernetes-secret-generator
 ----
 
+TIP: For OpenShift you can use the provided `crossplane-openshift-values.yaml` Helm values file for Crossplane to be compatible with the permissions.
+
 == Configure Crossplane and App Catalog
 
 . Create kubeconfig secret to access `appc-service1` from `appc-control`

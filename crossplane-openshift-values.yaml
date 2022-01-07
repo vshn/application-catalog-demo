@@ -1,0 +1,8 @@
+args:
+  - --debug
+securityContextRBACManager:
+  runAsUser: null
+  runAsGroup: null
+securityContextCrossplane:
+  runAsUser: null
+  runAsGroup: null
